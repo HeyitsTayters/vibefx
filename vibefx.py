@@ -85,6 +85,15 @@ PRESETS = {
         "effects": {"clarity": 5, "ambience": 2, "surround": 4, "boost": 7, "bass": 3, "fidelity": 2},
         "eq": [3, 2, -1, 0, 0, 1, 2, 2, -1, 1],
     },
+    # TV shows: dialogue first, like Movies, but TV mixes carry less low-end
+    # effects, so there's no sub-bass push. Small lifts at 250 Hz-2 kHz for
+    # voice body, a dip at 4-8 kHz to tame harsh broadcast sibilance, a little
+    # air, and moderate leveling for ads vs. shows. From FxSound's TV preset
+    # (+1 dB @250/735/2.5k, -1 dB @5.3k/8.6k, +2 dB @13.8k; 5/10 boost).
+    "TV": {
+        "effects": {"clarity": 4, "ambience": 2, "surround": 4, "boost": 5, "bass": 3, "fidelity": 2},
+        "eq": [0, 0, 0, 1, 1, 1, 1, -1, -1, 2],
+    },
     # Footsteps and reloads sit around 250 Hz-4 kHz with directional detail in
     # 6-9 kHz; cut the 60-250 Hz rumble of explosions, lift 2-4 kHz and a
     # little 8 kHz. No ambience (reverb smears positional cues); Dynamic Boost
@@ -107,6 +116,16 @@ PRESETS = {
     "Bass Boost": {
         "effects": {"clarity": 3, "ambience": 2, "surround": 2, "boost": 3, "bass": 6, "fidelity": 2},
         "eq": [1, 2, 1, -2, 0, 0, 0, 0, 0, 1],
+    },
+    # Maximum loudness for quiet sources or weak laptop speakers: the limiter
+    # does the work (Dynamic Boost 8/10, about +10 dB into a -1 dB ceiling),
+    # with a loudness-style curve lifting lows and highs so the sound stays
+    # full instead of thin as it gets louder. From FxSound's Volume Boost
+    # (8/10 boost, +3 dB @100 Hz, +2 dB @240-400 Hz, +1-2 dB above 2.5 kHz).
+    # Needs the limiter; without it, headroom keeps the level unchanged.
+    "Volume Boost": {
+        "effects": {"clarity": 3, "ambience": 0, "surround": 2, "boost": 8, "bass": 3, "fidelity": 2},
+        "eq": [1, 2, 2, 1, 1, 0, 1, 1, 1, 2],
     },
 }
 
@@ -640,8 +659,9 @@ HELP = [
     ]),
     ("Output and presets", [
         ("Play through", "The speakers or headphones VibeFX sends its sound to."),
-        ("Preset", "Flat, Music, Movies, Gaming, Voice and Bass Boost set every effect and EQ band "
-         "at once. Moving any slider afterwards switches the preset to Custom."),
+        ("Preset", "Flat, Music, Movies, TV, Gaming, Voice, Bass Boost and Volume Boost set every "
+         "effect and EQ band at once. Moving any slider afterwards switches the preset to Custom. "
+         "Volume Boost needs the limiter (swh-plugins) to get louder."),
     ]),
     ("Headphone correction", [
         ("What it does", "Applies an AutoEQ profile that corrects your headphones' frequency "
