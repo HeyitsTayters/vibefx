@@ -32,7 +32,7 @@ OUTPUT_NAME = "vibefx_output"
 SERVICE = "vibefx.service"
 
 VERSION = "1.0.0"
-GITHUB_REPO = "OWNER/vibefx"  # owner/name on GitHub; releases drive update checks
+GITHUB_REPO = "HeyitsTayters/vibefx"  # owner/name on GitHub; releases drive update checks
 UPDATE_INTERVAL = 24 * 3600  # automatic checks at most once a day
 MAX_UPDATE_BYTES = 20 * 1024 * 1024
 
