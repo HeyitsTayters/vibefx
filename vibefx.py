@@ -885,7 +885,18 @@ class Window(Adw.ApplicationWindow):
 
     def _on_slider_scroll(self, ctl, dx, dy, scale):
         if ctl.get_current_event_state() & Gdk.ModifierType.CONTROL_MASK:
-            return False  # Ctrl held: the slider handles the wheel itself
+            # Ctrl held: one step per wheel notch. GTK's own handling moves by
+            # the page increment, which jumps a 0-10 slider end to end.
+            # Fractional deltas (hi-res wheels, touchpads) accumulate first.
+            unit = 1.0 if ctl.get_unit() == Gdk.ScrollUnit.WHEEL else 20.0  # px per step
+            acc = getattr(scale, "_scroll_acc", 0.0) + dy / unit
+            steps = int(acc)  # truncates toward zero
+            scale._scroll_acc = acc - steps
+            if steps:
+                adj = scale.get_adjustment()
+                # Scrolling up (negative dy) raises the value.
+                scale.set_value(adj.get_value() - steps * adj.get_step_increment())
+            return True
         sw = scale.get_ancestor(Gtk.ScrolledWindow)
         if sw is None:
             return True
