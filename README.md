@@ -11,8 +11,8 @@ you play gets clearer, wider and punchier.
 - **Effects** (0–10, like FxSound): Clarity, Ambience, Surround, Dynamic Boost,
   Bass Boost, Fidelity
 - **10-band equalizer** (31 Hz – 16 kHz, ±12 dB)
-- **Presets**: Flat, Music, Movies, Gaming, Voice, Bass Boost, tuned from
-  FxSound's own factory presets and common EQ practice
+- **Presets**: Flat, Music, Movies, TV, Gaming, Voice, Bass Boost, Volume Boost,
+  tuned from FxSound's own factory presets and common EQ practice
 - **Headphone correction**: import any profile from [autoeq.app](https://autoeq.app)
   (Parametric, Fixed-band or Graphic EQ), as a file or pasted text
 - **Limiter** for loudness without clipping (with `swh-plugins`)
