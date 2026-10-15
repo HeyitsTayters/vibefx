@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=VibeFX
+GenericName=Audio Enhancer
+Comment=FxSound-style audio enhancement for PipeWire
+Exec=vibefx
+Icon=vibefx
+Terminal=false
+Categories=AudioVideo;Audio;Mixer;
+Keywords=equalizer;eq;bass;audio;sound;enhancer;
+StartupWMClass=dev.tayters.VibeFX
