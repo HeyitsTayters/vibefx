@@ -31,7 +31,7 @@ SINK_NAME = "vibefx_input"
 OUTPUT_NAME = "vibefx_output"
 SERVICE = "vibefx.service"
 
-VERSION = "1.0.0"
+VERSION = "1.0.1"
 GITHUB_REPO = "HeyitsTayters/vibefx"  # owner/name on GitHub; releases drive update checks
 UPDATE_INTERVAL = 24 * 3600  # automatic checks at most once a day
 MAX_UPDATE_BYTES = 20 * 1024 * 1024
