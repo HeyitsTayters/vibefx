@@ -19,7 +19,11 @@ rm -f "$HOME/.local/bin/sonance" "$data/applications/sonance.desktop"
 
 install -Dm755 "$here/vibefx.py" "$HOME/.local/bin/vibefx"
 install -Dm644 "$here/vibefx.desktop" "$data/applications/vibefx.desktop"
-for icon in vibefx vibefx-tray vibefx-tray-off; do
+for size in 32 48 64 128 256 512; do
+  install -Dm644 "$here/icons/vibefx-$size.png" "$data/icons/hicolor/${size}x${size}/apps/vibefx.png"
+done
+rm -f "$data/icons/hicolor/scalable/apps/vibefx.svg"  # old vector app icon (pre-1.0.1)
+for icon in vibefx-tray vibefx-tray-off; do
   install -Dm644 "$here/icons/$icon.svg" "$data/icons/hicolor/scalable/apps/$icon.svg"
 done
 gtk-update-icon-cache -q -t "$data/icons/hicolor" 2>/dev/null || true
