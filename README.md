@@ -21,6 +21,10 @@ you play gets clearer, wider and punchier.
 - **Launch at startup**, optionally straight to the tray
 - **Update checks** against GitHub releases, with one-click install
 - Changes apply live, with no audio dropouts
+- **Built-in help** (F1, the ? button, or the tray menu) covering every control
+
+Sliders: drag, or hold **Ctrl** and scroll over one. The scroll wheel alone
+scrolls the window, so values never change by accident.
 
 ## How it works
 
