@@ -42,7 +42,7 @@ On Arch: `sudo pacman -S python-gobject gtk4 libadwaita swh-plugins`
 ## Install
 
 ```bash
-git clone https://github.com/OWNER/vibefx.git
+git clone https://github.com/HeyitsTayters/vibefx.git
 cd vibefx
 ./install.sh
 ```
