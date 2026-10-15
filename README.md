@@ -26,9 +26,10 @@ you play gets clearer, wider and punchier.
 
 VibeFX runs a PipeWire filter-chain (`vibefx.service`, a user unit) that
 creates a virtual **VibeFX** output, applies the effects with PipeWire's
-built-in filters, and plays into your real device. The app makes VibeFX your
-default output while it's on and hands audio back to your device when it's off
-or you quit.
+built-in filters, and plays into your real device. VibeFX is your default
+output while the app runs; turning effects off switches the chain to a neutral
+bypass instead of changing devices, so playback is never paused. Quitting hands
+audio back to your device.
 
 ## Requirements
 
