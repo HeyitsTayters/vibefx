@@ -614,6 +614,93 @@ def spa_value(v):
     return f"{float(v):.6f}"
 
 
+# ------------------------------------------------------------------- help
+
+HELP = [
+    ("Getting started", [
+        ("Turn effects on or off", "Use the switch at the top left of the window, the tray menu, or "
+         "middle-click the tray icon. Off is a clean bypass: playback is never paused."),
+        ("Where the sound goes", "VibeFX adds a \u201cVibeFX\u201d audio output, makes it your default while "
+         "the app runs, and passes the enhanced sound to the device chosen under Play through."),
+        ("Reset", "The curved-arrow button in the header sets everything back to the Flat preset."),
+    ]),
+    ("Mouse and keyboard", [
+        ("Adjust a slider", "Drag it, or hold Ctrl and scroll over it. Scrolling without Ctrl "
+         "scrolls the page, so you can't change values by accident."),
+        ("Keyboard", "Tab moves between controls; arrow keys, Page Up/Down, Home and End adjust "
+         "the focused slider."),
+        ("Help", "Press F1, or use the ? button in the header (or Help in the tray menu)."),
+    ]),
+    ("Tray icon", [
+        ("Left-click", "Opens the VibeFX window."),
+        ("Middle-click", "Turns effects on or off."),
+        ("Right-click", "Menu: Open, Effects on/off, Preset, Help, Quit."),
+        ("Closing the window", "VibeFX keeps running in the tray. Use Quit in the tray menu to exit; "
+         "quitting returns audio to your normal device."),
+    ]),
+    ("Output and presets", [
+        ("Play through", "The speakers or headphones VibeFX sends its sound to."),
+        ("Preset", "Flat, Music, Movies, Gaming, Voice and Bass Boost set every effect and EQ band "
+         "at once. Moving any slider afterwards switches the preset to Custom."),
+    ]),
+    ("Headphone correction", [
+        ("What it does", "Applies an AutoEQ profile that corrects your headphones' frequency "
+         "response toward a neutral target. It runs before presets and your EQ."),
+        ("Importing", "On autoeq.app pick your headphones, choose the Equalizer APO \u201cParametric "
+         "EQ\u201d export, then click Import\u2026 for the downloaded file or the paste button for "
+         "copied text. Fixed-band and Graphic EQ exports also work."),
+        ("Switch and trash", "The switch turns the profile on and off instantly; the trash button "
+         "removes it. Loading or removing a profile briefly restarts the audio engine."),
+    ]),
+    ("Effects (0\u201310)", [
+        ("Clarity", "Lifts the presence range around 3 kHz for crisper vocals and dialogue."),
+        ("Ambience", "Adds a subtle sense of room by blending in a short, softened echo from the "
+         "opposite channel."),
+        ("Surround", "Widens the stereo image."),
+        ("Dynamic Boost", "Makes everything louder while a limiter keeps peaks from distorting. "
+         "Needs the swh-plugins package."),
+        ("Bass Boost", "A low shelf that lifts everything below about 90 Hz."),
+        ("Fidelity", "A high shelf that adds sparkle above about 8 kHz."),
+    ]),
+    ("Equalizer", [
+        ("Bands", "Ten bands from 31 Hz to 16 kHz, each \u00b112 dB in half-dB steps. Low bands "
+         "(31\u2013250 Hz) are bass and warmth, 500 Hz\u20132 kHz the body of voices and "
+         "instruments, 4\u20138 kHz presence and detail, 16 kHz air."),
+    ]),
+    ("General", [
+        ("Launch at startup", "Starts VibeFX when you log in."),
+        ("Start in the background", "At login, only show the tray icon instead of the window."),
+        ("Check for updates automatically", "Looks for a new release on GitHub once a day. When "
+         "one is available a banner offers to install it; the app restarts without interrupting audio."),
+        ("Check now", "Checks for an update immediately."),
+    ]),
+    ("Troubleshooting", [
+        ("No sound", "Check Play through points at the right device. If you uninstall or VibeFX "
+         "stops unexpectedly, pick your device again in the system volume menu."),
+        ("Distortion with big boosts", "Install swh-plugins for the limiter, or lower Bass Boost "
+         "and EQ boosts."),
+        ("Engine logs", "journalctl --user -u vibefx"),
+    ]),
+]
+
+
+def build_help_dialog():
+    dialog = Adw.Dialog(title="VibeFX Help", content_width=520, content_height=720)
+    tv = Adw.ToolbarView()
+    tv.add_top_bar(Adw.HeaderBar())
+    page = Adw.PreferencesPage()
+    for title, items in HELP:
+        g = Adw.PreferencesGroup(title=title)
+        for name, text in items:
+            row = Adw.ActionRow(title=name, subtitle=text, subtitle_selectable=True)
+            row.set_activatable(False)
+            g.add(row)
+        page.add(g)
+    tv.set_content(page)
+    dialog.set_child(tv)
+    return dialog
+
+
 # --------------------------------------------------------------------- UI
 
 class Window(Adw.ApplicationWindow):
@@ -632,6 +719,14 @@ class Window(Adw.ApplicationWindow):
         header = Adw.HeaderBar()
         self.power = Gtk.Switch(valign=Gtk.Align.CENTER, tooltip_text="Enable effects")
         header.pack_start(self.power)
+        help_btn = Gtk.Button(icon_name="help-browser-symbolic", tooltip_text="Help (F1)")
+        help_btn.connect("clicked", lambda *_: self.show_help())
+        header.pack_end(help_btn)
+        keys = Gtk.ShortcutController()
+        keys.set_scope(Gtk.ShortcutScope.GLOBAL)
+        keys.add_shortcut(Gtk.Shortcut.new(Gtk.ShortcutTrigger.parse_string("F1"),
+                                           Gtk.CallbackAction.new(lambda *_: self.show_help() or True)))
+        self.add_controller(keys)
         reset = Gtk.Button(icon_name="edit-undo-symbolic", tooltip_text="Reset to Flat")
         reset.connect("clicked", lambda *_: self.apply_preset("Flat"))
         header.pack_end(reset)
@@ -690,7 +785,10 @@ class Window(Adw.ApplicationWindow):
         self.update_correction_row()
 
         # Effects
-        g = Adw.PreferencesGroup(title="Effects")
+        g = Adw.PreferencesGroup(
+            title="Effects",
+            description="Drag a slider, or hold Ctrl and scroll over it. The scroll wheel alone "
+                        "scrolls the page.")
         for key, label, desc in EFFECTS:
             row = Adw.ActionRow(title=label, subtitle=desc)
             sc = Gtk.Scale.new_with_range(Gtk.Orientation.HORIZONTAL, 0, 10, 1)
@@ -712,7 +810,9 @@ class Window(Adw.ApplicationWindow):
         page.add(g)
 
         # Equalizer
-        g = Adw.PreferencesGroup(title="Equalizer", description=f"±{int(EQ_RANGE)} dB")
+        g = Adw.PreferencesGroup(
+            title="Equalizer",
+            description=f"\u00b1{int(EQ_RANGE)} dB per band \u00b7 drag, or Ctrl + scroll to adjust")
         box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=2, homogeneous=True,
                       margin_top=12, margin_bottom=12, margin_start=6, margin_end=6)
         box.add_css_class("card")
@@ -770,6 +870,10 @@ class Window(Adw.ApplicationWindow):
         GLib.idle_add(self.start_engine)
 
     # ---- helpers
+    def show_help(self):
+        self.present()
+        build_help_dialog().present(self)
+
     def guard_scroll(self, scale):
         """Let the wheel scroll the page instead of nudging sliders. Hold Ctrl
         to adjust the slider under the pointer with the wheel."""
@@ -1208,7 +1312,7 @@ SNI_PATH = "/StatusNotifierItem"
 MENU_PATH = "/MenuBar"
 ICON_DIR = os.path.join(GLib.get_user_data_dir(), "icons", "hicolor", "scalable", "apps")
 
-M_OPEN, M_POWER, M_SEP1, M_PRESETS, M_SEP2, M_QUIT = 1, 2, 3, 4, 5, 6
+M_OPEN, M_POWER, M_SEP1, M_PRESETS, M_SEP2, M_QUIT, M_HELP = 1, 2, 3, 4, 5, 6, 7
 M_PRESET_BASE = 100
 
 
@@ -1334,6 +1438,7 @@ class Tray:
                        "toggle-state": _v("i", 1 if on else 0)}, []),
             (M_SEP1, {"type": _v("s", "separator")}, []),
             (M_PRESETS, {"label": _v("s", "Preset"), "children-display": _v("s", "submenu")}, presets),
+            (M_HELP, {"label": _v("s", "Help")}, []),
             (M_SEP2, {"type": _v("s", "separator")}, []),
             (M_QUIT, {"label": _v("s", "Quit VibeFX")}, []),
         ]
@@ -1397,6 +1502,8 @@ class Tray:
     def _clicked(self, iid):
         if iid == M_OPEN:
             self.app.show_window()
+        elif iid == M_HELP:
+            self.app.window.show_help()
         elif iid == M_POWER:
             self.app.toggle_enabled()
         elif iid == M_QUIT:
