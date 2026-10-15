@@ -280,7 +280,15 @@ def profile_name_from_path(path):
 # --------------------------------------------------------- effect mapping
 
 def controls(s, has_limiter):
-    """Map UI values to filter-chain control values, per node name."""
+    """Map UI values to filter-chain control values, per node name.
+
+    When effects are off the chain stays up and is set fully neutral (bypass)
+    rather than torn down: removing or switching the output device makes
+    browsers and other players pause, so toggling must never touch routing."""
+    bypass = not s.get("enabled", False)
+    if bypass:
+        s = dict(s, effects={k: 0 for k in s["effects"]}, eq=[0.0] * len(s["eq"]),
+                 correction_enabled=False)
     e = s["effects"]
     eq = s["eq"]
     bass_db = e["bass"] * 1.0          # 0..10 dB low shelf
@@ -329,7 +337,7 @@ def controls(s, has_limiter):
     if has_limiter:
         c["limit"] = {
             "Input gain (dB)": e["boost"] * 1.2,  # 0..12 dB into the limiter
-            "Limit (dB)": -1.0,
+            "Limit (dB)": 0.0 if bypass else -1.0,
             "Release time (s)": 0.15,
         }
     return c
@@ -756,8 +764,8 @@ class Window(Adw.ApplicationWindow):
 
         self.power.set_active(self.s["enabled"])
         self.power.connect("notify::active", self.on_power)
-        if self.s["enabled"]:
-            GLib.idle_add(self.enable)
+        # The engine runs whenever the app does; "off" is a live bypass.
+        GLib.idle_add(self.start_engine)
 
     # ---- helpers
     def toast(self, msg):
@@ -825,12 +833,7 @@ class Window(Adw.ApplicationWindow):
         if self.updating or not self.devices:
             return
         self.s["device"] = self.devices[row.get_selected()][0]
-        if self.s["enabled"]:
-            self.restart_engine()
-        else:
-            save_settings(self.s)
-            write_chain(self.s)
-            set_default_sink(self.s["device"])
+        self.restart_engine()
 
     # ---- startup + updates
     def on_autostart(self, *_):
@@ -1015,25 +1018,22 @@ class Window(Adw.ApplicationWindow):
 
     def restart_engine(self):
         """Apply changes that alter the graph's shape (device, correction
-        filters): rewrite the config and restart the chain if it's running."""
+        filters): rewrite the config and restart the chain."""
         save_settings(self.s)
         write_chain(self.s)
-        if self.s["enabled"]:
-            run(["systemctl", "--user", "restart", SERVICE])
-            self.sink_id = None
-            GLib.timeout_add(150, self.wait_for_sink, 0)
+        run(["systemctl", "--user", "restart", SERVICE])
+        self.sink_id = None
+        GLib.timeout_add(150, self.wait_for_sink, 0)
 
     def on_power(self, sw, _):
+        # Only the processing changes (bypass vs. effects); the output device
+        # stays put so playback isn't interrupted.
         self.s["enabled"] = sw.get_active()
-        save_settings(self.s)
-        if self.s["enabled"]:
-            self.enable()
-        else:
-            self.disable()
+        self.push()
         self.get_application().state_changed()
 
     # ---- engine control
-    def enable(self):
+    def start_engine(self):
         cur = default_sink_name()
         if cur and cur != SINK_NAME and not self.s["device"]:
             self.s["device"] = cur
@@ -1044,7 +1044,6 @@ class Window(Adw.ApplicationWindow):
         r = run(["systemctl", "--user", "start", SERVICE])
         if not r or r.returncode != 0:
             self.toast("Could not start the audio engine")
-            self.power.set_active(False)
             return False
         self.sink_id = None
         GLib.timeout_add(150, self.wait_for_sink, 0)
@@ -1062,9 +1061,6 @@ class Window(Adw.ApplicationWindow):
             return False
         GLib.timeout_add(150, self.wait_for_sink, tries + 1)
         return False
-
-    def disable(self):
-        self.stop_engine()
 
     def stop_engine(self):
         """Hand audio back to the real device and stop the chain."""
@@ -1085,8 +1081,6 @@ class Window(Adw.ApplicationWindow):
         self.pending = False
         save_settings(self.s)
         write_chain(self.s)
-        if not self.s["enabled"]:
-            return False
         if self.sink_id is None:
             self.sink_id = find_node_id(SINK_NAME)
             if self.sink_id is None:
