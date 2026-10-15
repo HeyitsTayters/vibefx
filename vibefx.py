@@ -24,7 +24,7 @@ import gi
 
 gi.require_version("Gtk", "4.0")
 gi.require_version("Adw", "1")
-from gi.repository import Adw, Gio, GLib, Gtk  # noqa: E402
+from gi.repository import Adw, Gdk, Gio, GLib, Gtk  # noqa: E402
 
 APP_ID = "dev.tayters.VibeFX"
 SINK_NAME = "vibefx_input"
@@ -708,6 +708,7 @@ class Window(Adw.ApplicationWindow):
             row.add_suffix(sc)
             g.add(row)
             self.sliders[key] = sc
+            self.guard_scroll(sc)
         page.add(g)
 
         # Equalizer
@@ -731,6 +732,7 @@ class Window(Adw.ApplicationWindow):
             col.append(lbl)
             box.append(col)
             self.eq_sliders.append(sc)
+            self.guard_scroll(sc)
         g.add(box)
         page.add(g)
 
@@ -768,6 +770,28 @@ class Window(Adw.ApplicationWindow):
         GLib.idle_add(self.start_engine)
 
     # ---- helpers
+    def guard_scroll(self, scale):
+        """Let the wheel scroll the page instead of nudging sliders. Hold Ctrl
+        to adjust the slider under the pointer with the wheel."""
+        scale.set_tooltip_text("Drag, or Ctrl + scroll to adjust")
+        ctl = Gtk.EventControllerScroll.new(Gtk.EventControllerScrollFlags.BOTH_AXES)
+        ctl.set_propagation_phase(Gtk.PropagationPhase.CAPTURE)
+        ctl.connect("scroll", self._on_slider_scroll, scale)
+        scale.add_controller(ctl)
+
+    def _on_slider_scroll(self, ctl, dx, dy, scale):
+        if ctl.get_current_event_state() & Gdk.ModifierType.CONTROL_MASK:
+            return False  # Ctrl held: the slider handles the wheel itself
+        sw = scale.get_ancestor(Gtk.ScrolledWindow)
+        if sw is None:
+            return True
+        adj = sw.get_vadjustment()
+        # Wheel clicks arrive as whole steps; touchpads as pixel deltas.
+        step = dy * 60 if ctl.get_unit() == Gdk.ScrollUnit.WHEEL else dy
+        adj.set_value(min(max(adj.get_value() + step, adj.get_lower()),
+                          adj.get_upper() - adj.get_page_size()))
+        return True  # claimed: the slider doesn't move
+
     def toast(self, msg):
         self.toasts.add_toast(Adw.Toast(title=msg, timeout=3))
 
