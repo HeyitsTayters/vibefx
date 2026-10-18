@@ -22,6 +22,8 @@ you play gets clearer, wider and punchier.
 - **Update checks** against GitHub releases, with one-click install
 - Changes apply live, with no audio dropouts
 - **Built-in help** (F1, the ? button, or the tray menu) covering every control
+- **[Omarchy bar widget](https://github.com/HeyitsTayters/vibefx-omarchy)**
+  and a scriptable `vibefx ctl` command (see below)
 
 Sliders: drag, or hold **Ctrl** and scroll over one. The scroll wheel alone
 scrolls the window, so values never change by accident.
@@ -55,6 +57,45 @@ cd vibefx
 This installs to `~/.local` (no root): the `vibefx` command, an app launcher
 entry, icons, and a login startup entry. Launch **VibeFX** from your app
 launcher.
+
+## Omarchy bar widget
+
+On [Omarchy](https://omarchy.org), `install.sh` also adds the
+**[VibeFX bar widget](https://github.com/HeyitsTayters/vibefx-omarchy)**
+(`dev.tayters.vibefx`) and places it next to the volume control. It lives in
+its own repo, so `omarchy plugin update dev.tayters.vibefx` keeps it current;
+to add it by hand: `omarchy plugin add https://github.com/HeyitsTayters/vibefx-omarchy.git`.
+
+<img src="docs/omarchy-widget.png" alt="VibeFX bar widget" width="360">
+
+- **Click** opens the panel: effects switch, presets, effect sliders, and
+  shortcuts to open or quit the app
+- **Right-click** toggles effects, **middle-click** opens the app,
+  **scroll** cycles presets
+- Keyboard: arrows move, ←/→ adjust a slider, Enter activates, `p` toggles
+  effects, `o` opens the app
+- When VibeFX isn't running, the panel offers to start it
+
+Move or remove it like any widget (`omarchy bar move dev.tayters.vibefx …`,
+`omarchy plugin disable dev.tayters.vibefx`); reinstalling keeps your choice.
+Keybindings can drive it through the shell, for example
+`omarchy-shell dev.tayters.vibefx toggleEffects` (also `on`, `off`,
+`preset <name>`, `nextPreset`, `previousPreset`, `open`).
+
+## Command line
+
+The running app has a D-Bus API (`dev.tayters.VibeFX.Control` at
+`/dev/tayters/VibeFX/Control`), wrapped by `vibefx ctl`:
+
+```bash
+vibefx ctl status            # state as JSON
+vibefx ctl toggle            # also: on, off
+vibefx ctl preset Movies
+vibefx ctl effect bass 6     # clarity ambience surround boost bass fidelity, 0-10
+vibefx ctl show              # open the window (starts VibeFX if needed)
+vibefx ctl start | quit
+vibefx ctl watch             # JSON line per change; reads commands on stdin
+```
 
 ## Uninstall
 
