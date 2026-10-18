@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "id": "dev.tayters.vibefx",
+  "name": "VibeFX",
+  "version": "1.0.0",
+  "author": "tayters",
+  "license": "MIT",
+  "description": "Bar control for the VibeFX audio enhancer: effects on/off, presets and effect levels.",
+  "kinds": [
+    "bar-widget"
+  ],
+  "entryPoints": {
+    "barWidget": "Panel.qml"
+  },
+  "barWidget": {
+    "displayName": "VibeFX",
+    "description": "Switch VibeFX effects, pick a preset and tune the effects from the bar. Right-click toggles effects, scroll cycles presets.",
+    "category": "Audio",
+    "allowMultiple": false,
+    "defaultSection": "right"
+  }
+}

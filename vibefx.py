@@ -1240,6 +1240,8 @@ class Window(Adw.ApplicationWindow):
         self.pending = False
         save_settings(self.s)
         write_chain(self.s)
+        if self.get_application().control:
+            self.get_application().control.emit()
         if self.sink_id is None:
             self.sink_id = find_node_id(SINK_NAME)
             if self.sink_id is None:
@@ -1546,12 +1548,104 @@ class Tray:
         return False
 
 
+# ---------------------------------------------------------------- control
+# A small D-Bus API on the app's own bus name so other tools (the Omarchy bar
+# plugin, `vibefx ctl`) can read and drive the running instance. State goes
+# out as one JSON string, so clients don't have to track a growing signature.
+
+CONTROL_PATH = "/dev/tayters/VibeFX/Control"
+CONTROL_IFACE = "dev.tayters.VibeFX.Control"
+CONTROL_XML = f"""<node>
+<interface name="{CONTROL_IFACE}">
+  <method name="GetState"><arg name="state" type="s" direction="out"/></method>
+  <method name="SetEnabled"><arg name="enabled" type="b" direction="in"/></method>
+  <method name="SetPreset"><arg name="name" type="s" direction="in"/></method>
+  <method name="SetEffect">
+    <arg name="key" type="s" direction="in"/>
+    <arg name="value" type="i" direction="in"/>
+  </method>
+  <method name="ShowWindow"/>
+  <method name="Quit"/>
+  <signal name="StateChanged"><arg name="state" type="s"/></signal>
+</interface>
+</node>"""
+
+
+def state_json(s, has_limiter, running=True):
+    return json.dumps({
+        "running": running,
+        "version": VERSION,
+        "enabled": s.get("enabled", False),
+        "preset": s.get("preset", "Custom"),
+        "presets": list(PRESETS),
+        "effects": {k: int(s["effects"].get(k, 0)) for k, _, _ in EFFECTS},
+        "effectInfo": [{"key": k, "label": label, "description": desc} for k, label, desc in EFFECTS],
+        "limiter": has_limiter,
+        "correction": (s.get("correction") or {}).get("name") if s.get("correction") else None,
+        "correctionEnabled": s.get("correction_enabled", True),
+    })
+
+
+class Control:
+    def __init__(self, app):
+        self.app = app
+        self.conn = app.get_dbus_connection()
+        self.last = None
+        if not self.conn:
+            return
+        iface = Gio.DBusNodeInfo.new_for_xml(CONTROL_XML).interfaces[0]
+        register = getattr(self.conn, "register_object_with_closures2", None) or self.conn.register_object
+        register(CONTROL_PATH, iface, self._call, None, None)
+
+    def state(self):
+        win = self.app.window
+        return state_json(win.s, win.has_limiter)
+
+    def emit(self):
+        """Broadcast the state if it changed (push() runs on every tweak)."""
+        if not self.conn:
+            return
+        cur = self.state()
+        if cur == self.last:
+            return
+        self.last = cur
+        self.conn.emit_signal(None, CONTROL_PATH, CONTROL_IFACE, "StateChanged", _v("(s)", (cur,)))
+
+    def _call(self, _conn, _sender, _path, _iface, method, params, inv):
+        win = self.app.window
+        if method == "GetState":
+            inv.return_value(_v("(s)", (self.state(),)))
+            return
+        if method == "SetEnabled":
+            (on,) = params.unpack()
+            GLib.idle_add(lambda: win.power.set_active(on) and False)
+        elif method == "SetPreset":
+            (name,) = params.unpack()
+            if name not in PRESETS:
+                inv.return_dbus_error(f"{CONTROL_IFACE}.Error.UnknownPreset", f"No preset named {name!r}")
+                return
+            GLib.idle_add(lambda: win.apply_preset(name) and False)
+        elif method == "SetEffect":
+            key, value = params.unpack()
+            if key not in win.sliders:
+                inv.return_dbus_error(f"{CONTROL_IFACE}.Error.UnknownEffect", f"No effect named {key!r}")
+                return
+            # Moving the slider runs the normal path: mark Custom, push live.
+            GLib.idle_add(lambda: win.sliders[key].set_value(max(0, min(10, value))) and False)
+        elif method == "ShowWindow":
+            GLib.idle_add(self.app.show_window)
+        elif method == "Quit":
+            GLib.idle_add(self.app.quit_all)
+        inv.return_value(None)
+
+
 class App(Adw.Application):
     def __init__(self, background=False):
         super().__init__(application_id=APP_ID)
         self.background = background
         self.window = None
         self.tray = None
+        self.control = None
 
     def do_startup(self):
         Adw.Application.do_startup(self)
@@ -1562,6 +1656,7 @@ class App(Adw.Application):
         self.window = Window(self)
         self.window.set_hide_on_close(True)
         self.tray = Tray(self)
+        self.control = Control(self)
 
     def do_activate(self):
         # Launched with --background (login autostart): stay in the tray. Any
@@ -1612,7 +1707,169 @@ class App(Adw.Application):
         self.quit()
 
 
+CTL_USAGE = """usage: vibefx ctl COMMAND
+  status            print the state as JSON
+  on | off | toggle switch the effects
+  preset NAME       apply a preset
+  effect KEY 0-10   set an effect (clarity ambience surround boost bass fidelity)
+  show              open the window (starts VibeFX if needed)
+  start             start VibeFX in the tray
+  quit              quit VibeFX (stops the enhancement)
+  watch             print the state as a JSON line on every change; reads
+                    the commands above, one per line, from stdin"""
+
+
+def launch(background):
+    args = ["--background"] if background else []
+    cmd = (["uwsm", "app", "--", launcher_path()] if shutil.which("uwsm") else [launcher_path()]) + args
+    subprocess.Popen(cmd, start_new_session=True, stdin=subprocess.DEVNULL,
+                     stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+
+def ctl_request(words, state):
+    """Turn a ctl command into (method, params). `state` is the current state
+    dict, or None when VibeFX isn't running. Raises ValueError on bad input."""
+    if not words:
+        raise ValueError("missing command")
+    cmd, rest = words[0], words[1:]
+    if cmd in ("on", "off"):
+        return "SetEnabled", _v("(b)", (cmd == "on",))
+    if cmd == "toggle":
+        return "SetEnabled", _v("(b)", (not (state or {}).get("enabled", False),))
+    if cmd == "preset" and rest:
+        return "SetPreset", _v("(s)", (" ".join(rest),))
+    if cmd == "effect" and len(rest) == 2:
+        try:
+            return "SetEffect", _v("(si)", (rest[0], int(round(float(rest[1])))))
+        except ValueError:
+            raise ValueError(f"not a number: {rest[1]}") from None
+    if cmd == "show":
+        return "ShowWindow", None
+    if cmd == "quit":
+        return "Quit", None
+    raise ValueError(f"unknown command: {' '.join(words)}")
+
+
+def offline_state():
+    return state_json(load_settings(), limiter_path() is not None, running=False)
+
+
+def ctl(args):
+    conn = Gio.bus_get_sync(Gio.BusType.SESSION, None)
+
+    def call(method, params=None):
+        return conn.call_sync(APP_ID, CONTROL_PATH, CONTROL_IFACE, method, params,
+                              None, Gio.DBusCallFlags.NO_AUTO_START, 3000, None)
+
+    def get_state():
+        try:
+            return json.loads(call("GetState").unpack()[0])
+        except GLib.Error:
+            return None
+
+    if not args or args[0] in ("-h", "--help", "help"):
+        print(CTL_USAGE)
+        return 0 if args else 2
+    if args[0] == "watch":
+        return ctl_watch(conn)
+    state = get_state()
+    if args[0] == "status":
+        print(json.dumps(state) if state else offline_state())
+        return 0
+    if args[0] == "start" or (args[0] == "show" and state is None):
+        if state is None:
+            launch(background=args[0] == "start")
+        elif args[0] == "start":
+            print("VibeFX is already running")
+        return 0
+    if state is None:
+        print("vibefx: VibeFX is not running (start it with: vibefx ctl start)", file=sys.stderr)
+        return 1
+    try:
+        method, params = ctl_request(args, state)
+        call(method, params)
+    except ValueError as e:
+        print(f"vibefx: {e}\n\n{CTL_USAGE}", file=sys.stderr)
+        return 2
+    except GLib.Error as e:
+        msg = e.message.split(": ", 1)[-1] if e.message.startswith("GDBus.Error:") else e.message
+        print(f"vibefx: {msg}", file=sys.stderr)
+        return 1
+    return 0
+
+
+def ctl_watch(conn):
+    """Stream the state as JSON lines (re-sent whenever VibeFX starts, stops or
+    changes) and run ctl commands read from stdin. Ends when stdin closes."""
+    loop = GLib.MainLoop()
+    current = {"state": None}
+
+    def emit(text):
+        try:
+            current["state"] = json.loads(text)
+            sys.stdout.write(text + "\n")
+            sys.stdout.flush()
+        except (ValueError, BrokenPipeError):
+            loop.quit()
+
+    def appeared(_conn, _name, _owner):
+        def done(c, res):
+            try:
+                emit(c.call_finish(res).unpack()[0])
+            except GLib.Error:
+                pass
+        conn.call(APP_ID, CONTROL_PATH, CONTROL_IFACE, "GetState", None, None,
+                  Gio.DBusCallFlags.NO_AUTO_START, 3000, None, done)
+
+    def vanished(_conn, _name):
+        emit(offline_state())
+
+    def changed(_c, _sender, _path, _iface, _sig, params):
+        emit(params.unpack()[0])
+
+    def run_line(line):
+        words = line.split()
+        if not words:
+            return
+        running = (current["state"] or {}).get("running", False)
+        if words[0] in ("start", "show") and not running:
+            launch(background=words[0] == "start")
+            return
+        if words[0] == "start" or not running:
+            return
+        try:
+            method, params = ctl_request(words, current["state"])
+        except ValueError as e:
+            print(f"vibefx: {e}", file=sys.stderr)
+            return
+        conn.call(APP_ID, CONTROL_PATH, CONTROL_IFACE, method, params, None,
+                  Gio.DBusCallFlags.NO_AUTO_START, 3000, None, None)
+
+    # Raw reads: a buffered readline() could hold back queued lines the fd
+    # watch would never wake up for.
+    pending = [b""]
+
+    def on_stdin(fd, cond):
+        chunk = os.read(fd, 4096) if cond & GLib.IO_IN else b""
+        if not chunk:
+            loop.quit()
+            return False
+        *lines, pending[0] = (pending[0] + chunk).split(b"\n")
+        for line in lines:
+            run_line(line.decode(errors="replace"))
+        return True
+
+    conn.signal_subscribe(APP_ID, CONTROL_IFACE, "StateChanged", CONTROL_PATH, None,
+                          Gio.DBusSignalFlags.NONE, changed)
+    Gio.bus_watch_name_on_connection(conn, APP_ID, Gio.BusNameWatcherFlags.NONE, appeared, vanished)
+    GLib.io_add_watch(sys.stdin.fileno(), GLib.PRIORITY_DEFAULT, GLib.IO_IN | GLib.IO_HUP, on_stdin)
+    loop.run()
+    return 0
+
+
 def main():
+    if len(sys.argv) > 1 and sys.argv[1] == "ctl":
+        return ctl(sys.argv[2:])
     for tool in ("pipewire", "pw-cli", "pw-dump", "pw-metadata", "wpctl", "systemctl"):
         if not shutil.which(tool):
             print(f"vibefx: missing required tool: {tool}", file=sys.stderr)
