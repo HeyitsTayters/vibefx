@@ -31,6 +31,25 @@ gtk-update-icon-cache -q -t "$data/icons/hicolor" 2>/dev/null || true
 # Login autostart follows the app's "Launch at startup" settings (default: on, in the tray).
 "$HOME/.local/bin/vibefx" --sync-autostart
 
+# Omarchy: install the bar widget, and put it next to the volume control the
+# first time (later installs leave its place, or its removal, alone).
+plugin_id="dev.tayters.vibefx"
+plugin_dir="$conf/omarchy/plugins/$plugin_id"
+if command -v omarchy >/dev/null && [ -d "$conf/omarchy" ]; then
+  first_install=0
+  [ -d "$plugin_dir" ] || first_install=1
+  rm -rf "$plugin_dir"
+  install -d "$plugin_dir"
+  install -m644 "$here/omarchy/$plugin_id/"* "$plugin_dir/"
+  if [ "$first_install" = 1 ]; then
+    # The shell only knows about the new folder once it has rescanned.
+    omarchy-shell shell rescanPlugins >/dev/null 2>&1 || true
+    omarchy plugin enable "$plugin_id" --before omarchy.audio >/dev/null 2>&1 ||
+      omarchy plugin enable "$plugin_id" >/dev/null 2>&1 || true
+  fi
+  echo "Omarchy bar widget installed ($plugin_id)."
+fi
+
 echo "Installed VibeFX $("$HOME/.local/bin/vibefx" --version | cut -d' ' -f2): launcher entry, tray icons, startup entry."
 if ! ls /usr/lib/ladspa/fast_lookahead_limiter_1913.so >/dev/null 2>&1; then
   echo "Tip: install swh-plugins for the limiter (enables Dynamic Boost and full loudness):"
