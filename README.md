@@ -22,7 +22,8 @@ you play gets clearer, wider and punchier.
 - **Update checks** against GitHub releases, with one-click install
 - Changes apply live, with no audio dropouts
 - **Built-in help** (F1, the ? button, or the tray menu) covering every control
-- **Omarchy bar widget** and a scriptable `vibefx ctl` command (see below)
+- **[Omarchy bar widget](https://github.com/HeyitsTayters/vibefx-omarchy)**
+  and a scriptable `vibefx ctl` command (see below)
 
 Sliders: drag, or hold **Ctrl** and scroll over one. The scroll wheel alone
 scrolls the window, so values never change by accident.
@@ -59,8 +60,11 @@ launcher.
 
 ## Omarchy bar widget
 
-On [Omarchy](https://omarchy.org), `install.sh` also installs a bar widget
-(`dev.tayters.vibefx`) and places it next to the volume control.
+On [Omarchy](https://omarchy.org), `install.sh` also adds the
+**[VibeFX bar widget](https://github.com/HeyitsTayters/vibefx-omarchy)**
+(`dev.tayters.vibefx`) and places it next to the volume control. It lives in
+its own repo, so `omarchy plugin update dev.tayters.vibefx` keeps it current;
+to add it by hand: `omarchy plugin add https://github.com/HeyitsTayters/vibefx-omarchy.git`.
 
 <img src="docs/omarchy-widget.png" alt="VibeFX bar widget" width="360">
 
