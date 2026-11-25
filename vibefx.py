@@ -738,6 +738,7 @@ class Window(Adw.ApplicationWindow):
         tv = Adw.ToolbarView()
         header = Adw.HeaderBar()
         self.power = Gtk.Switch(valign=Gtk.Align.CENTER, tooltip_text="Enable effects")
+        self.power.add_css_class("vibefx-power")
         header.pack_start(self.power)
         help_btn = Gtk.Button(icon_name="help-browser-symbolic", tooltip_text="Help (F1)")
         help_btn.connect("clicked", lambda *_: self.show_help())
@@ -1555,6 +1556,13 @@ class App(Adw.Application):
 
     def do_startup(self):
         Adw.Application.do_startup(self)
+        # The header-bar switch can render "on" as plain grey (seen on KDE),
+        # so give the power switch an unmistakable checked color.
+        css = Gtk.CssProvider()
+        css.load_from_string("switch.vibefx-power:checked { background-color: @success_bg_color; }"
+                             "switch.vibefx-power:checked > slider { background-color: white; }")
+        Gtk.StyleContext.add_provider_for_display(
+            Gdk.Display.get_default(), css, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION)
         self.hold()  # keep running in the tray with the window closed
         show = Gio.SimpleAction.new("show-window", None)
         show.connect("activate", lambda *_: self.show_window())
